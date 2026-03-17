@@ -55,7 +55,7 @@
     return match[3] ? base + 0.5 : base;
   };
 
-  const formatSales = (value) => String(value || "-").replace(/^90天销/, "");
+  const formatSales = (value) => String(value || "-");
 
   const renderCategories = () => {
     const grid = document.getElementById("categoryGrid");
@@ -92,7 +92,7 @@
         <h3 class="product-title">${product.title || "未命名商品"}</h3>
         <div class="meta-row">
           <span class="price-tag">${formatPrice(product.price)}</span>
-          <span class="sales-tag">90天销量 ${formatSales(product.sales_90d)}</span>
+          <span class="sales-tag">销量 ${formatSales(product.sales_90d)}</span>
         </div>
         <dl class="product-meta">
           <div>
@@ -271,4 +271,5 @@
     initProductsPage();
   }
 })();
+
 

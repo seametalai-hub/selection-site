@@ -1,36 +1,31 @@
 ﻿import argparse
 import csv
-import importlib.util
 import json
-import math
-import re
 import shutil
+import subprocess
 import time
 import zipfile
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from playwright.sync_api import sync_playwright
-
-TARGET_URL = (
-    "https://air.1688.com/app/1688-lp/landing-page/home/"
-    "inventory/products.html?bizType=cbu&customerId=cbu"
-)
+TARGET_URL = "https://air.1688.com/app/channel-fe/search/index.html#/result?spm=a260k.home2025.leftmenu_COLLAPSE.dfenxiaoxuanpin0of0fenxiao"
 ROOT = Path(__file__).resolve().parent
 CATEGORIES_PATH = ROOT / "categories.json"
 OUTPUT_ROOT = ROOT / "outputs"
-USER_DATA_DIR = ROOT / ".playwright-1688-profile"
-SCRAPER_MODULE_PATH = ROOT / "1688_auto_trial" / "scraper_auto_ext.py"
-SITE_FILES = ["index.html", "products.html", "styles.css", "app.js", "data.js"]
+SCRAPER_SCRIPT_PATH = ROOT / "1688_auto_trial" / "scraper_channel_cdp.js"
+SITE_FILES = ["index.html", "products.html", "styles.css", "app.js"]
+DATA_FILE = "data.js"
+DEFAULT_CDP_ENDPOINT = "http://127.0.0.1:9222"
+
 
 def build_user_guide() -> str:
     return (
-        "选品 Product V1.0 操作说明\n\n"
+        "选品 Product V2.0 操作说明\n\n"
         "一、版本说明\n"
-        "- 当前版本名称：选品 Product V1.0\n"
-        "- 当前能力：基础产品数据加载、类目浏览、搜索、排序、筛选、查看原链接\n"
-        "- 数据来源：1688 选品抓取结果，已生成到 products.json\n\n"
+        "- 当前版本名称：选品 Product V2.0\n"
+        "- 当前能力：频道页新源抓取、商品搜索、类目浏览、排序、筛选、查看原链接\n"
+        "- 数据来源：1688 找低价货源频道页，已生成到 products.json\n\n"
         "二、文件说明\n"
         "请保持 demo 文件夹完整，不要只单独移动某一个文件。\n"
         "主要文件包括：\n"
@@ -52,84 +47,20 @@ def build_user_guide() -> str:
         "3. 终端启动后，请保持终端窗口不要关闭\n"
         "4. 如果浏览器没有自动打开，请手动打开以下地址：\n"
         "http://127.0.0.1:8123/index.html\n\n"
-        "五、手动启动方式\n"
-        "如果脚本无法正常运行，可手动启动本地服务。\n\n"
-        "Windows：\n"
-        "python -m http.server 8123\n\n"
-        "Mac：\n"
-        "python3 -m http.server 8123\n\n"
-        "然后手动打开：\n"
-        "http://127.0.0.1:8123/index.html\n\n"
-        "六、网页内可做的操作\n"
-        "- 首页点击类目进入商品列表\n"
-        "- 搜索商品名或供应商\n"
-        "- 按上架时间排序\n"
-        "- 按销量排序\n"
-        "- 按价格排序\n"
-        "- 按发货地筛选\n"
-        "- 按价格区间筛选\n"
-        "- 点击‘查看原链接’跳转到 1688 商品页\n\n"
-        "七、注意事项\n"
-        "- 必须保持 demo 文件夹完整\n"
-        "- 启动后不要关闭终端窗口，否则网页会断开\n"
-        "- 当前图片使用网络图片地址，所以演示电脑需要联网\n"
-        "- 第一次打开如果显示旧数据，请刷新浏览器\n"
-        "- 如果浏览器打不开，请直接复制地址到浏览器：\n"
-        "http://127.0.0.1:8123/index.html\n\n"
-        "八、常见问题\n"
-        "1. 双击后网页没打开\n"
-        "处理方法：手动在浏览器输入 http://127.0.0.1:8123/index.html\n\n"
-        "2. 网页打不开\n"
-        "处理方法：\n"
-        "- 检查终端窗口是否已关闭\n"
-        "- 检查电脑是否安装 Python / Python3\n"
-        "- 检查 8123 端口是否被占用\n\n"
-        "3. 图片没显示\n"
-        "处理方法：\n"
-        "- 检查网络是否正常\n"
-        "- 当前版本图片为在线图片地址，断网时可能无法显示\n\n"
-        "4. Mac 提示无法验证脚本\n"
-        "处理方法：\n"
-        "- 右键 start_preview.command\n"
-        "- 选择‘用终端打开’\n"
-        "- 或手动执行 python3 -m http.server 8123\n\n"
-        "九、当前版本定位\n"
-        "当前版本主要用于：\n"
-        "- 演示选品网页结构\n"
-        "- 演示类目商品数据加载\n"
-        "- 演示基础搜索、排序、筛选能力\n\n"
-        "当前版本暂未覆盖：\n"
-        "- 自动定时更新\n"
-        "- OpenClaw 自动触发\n"
-        "- 飞书自动回传\n"
-        "- 增量分析和去重分析\n\n"
-        "十、当前数据说明\n"
-        "- 当前为 2026-03-16 全量抓取结果\n"
-        "- 共 12 个类目\n"
-        "- 当前总商品数：5201\n\n"
-        "十一、联系人说明\n"
-        "如果后续需要更新数据，请运行统一命令：\n"
+        "五、统一更新命令\n"
         "python update_products.py run\n\n"
         "这条命令会自动完成：\n"
-        "- 爬虫\n"
-        "- 转 products.json\n"
-        "- 生成网页\n"
-        "- 发布最新数据\n"
+        "- 爬取 12 个类目（默认每类 500 条）\n"
+        "- 生成 raw CSV\n"
+        "- 合并 products.json\n"
+        "- 生成网页站点文件\n"
+        "- 发布本地预览数据\n"
         "- 打包演示包\n"
     )
 
 
-def load_scraper_module():
-    spec = importlib.util.spec_from_file_location("scraper_auto_ext", SCRAPER_MODULE_PATH)
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"Unable to load scraper module from {SCRAPER_MODULE_PATH}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Unified CLI workflow for 1688 selection data updates.")
+    parser = argparse.ArgumentParser(description="Unified CLI workflow for 1688 channel-page updates.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     def add_common(subparser: argparse.ArgumentParser) -> None:
@@ -137,9 +68,8 @@ def parse_args() -> argparse.Namespace:
         subparser.add_argument("--target-date", default=datetime.now().strftime("%Y-%m-%d"), help="Output date label.")
         subparser.add_argument("--run-label", default=datetime.now().strftime("run-%H%M%S"), help="Run folder label.")
         subparser.add_argument("--output-root", default=str(OUTPUT_ROOT), help="Root output directory.")
-        subparser.add_argument("--user-data-dir", default=str(USER_DATA_DIR), help="Playwright user data directory.")
-        subparser.add_argument("--timeout", type=int, default=90000, help="Browser timeout in milliseconds.")
-        subparser.add_argument("--headless", action="store_true", help="Run browser headlessly.")
+        subparser.add_argument("--endpoint", default=DEFAULT_CDP_ENDPOINT, help="Chrome CDP endpoint.")
+        subparser.add_argument("--wait-ms", type=int, default=5000, help="Wait time after each page switch.")
         subparser.add_argument("--limit-categories", type=int, default=0, help="Limit the number of categories for a partial run.")
 
     add_common(subparsers.add_parser("run", help="Run the full workflow."))
@@ -192,80 +122,85 @@ def prepare_run_dirs(output_root: Path, target_date: str, run_label: str) -> dic
     return {"run_dir": run_dir, "raw_dir": raw_dir, "site_dir": site_dir, "package_dir": package_dir}
 
 
-def write_csv(rows: list[dict[str, str]], output_path: Path) -> None:
-    if not rows:
-        return
-    with output_path.open("w", newline="", encoding="utf-8-sig") as file:
-        writer = csv.DictWriter(file, fieldnames=list(rows[0].keys()))
-        writer.writeheader()
-        writer.writerows(rows)
+def run_channel_scraper(
+    *,
+    endpoint: str,
+    output_path: Path,
+    main_category: str,
+    sub_category: str,
+    max_items: int,
+    wait_ms: int,
+) -> dict[str, Any]:
+    pages = max((max_items + 49) // 50, 1)
+    command = [
+        "node",
+        str(SCRAPER_SCRIPT_PATH),
+        "--endpoint",
+        endpoint,
+        "--output",
+        str(output_path),
+        "--main-category",
+        main_category,
+        "--sub-category",
+        sub_category,
+        "--max-items",
+        str(max_items),
+        "--pages",
+        str(pages),
+        "--wait-ms",
+        str(wait_ms),
+    ]
+    result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8")
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"channel scraper failed for {sub_category}\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+        )
+    if result.stderr.strip():
+        print(result.stderr.strip())
+    return json.loads(result.stdout)
 
 
 def scrape_all_categories(args: argparse.Namespace) -> Path:
-    scraper = load_scraper_module()
     categories = load_categories(Path(args.categories), args.limit_categories)
     dirs = prepare_run_dirs(Path(args.output_root), args.target_date, args.run_label)
     manifest: dict[str, Any] = {
         "target_date": args.target_date,
         "run_label": args.run_label,
         "started_at": datetime.now().isoformat(timespec="seconds"),
+        "source": "1688-channel-page",
         "categories": [],
     }
 
-    with sync_playwright() as playwright:
-        context = playwright.chromium.launch_persistent_context(
-            user_data_dir=str(Path(args.user_data_dir)),
-            headless=args.headless,
-            viewport={"width": 1440, "height": 1100},
+    for category in categories:
+        sub_category = category["sub_category"]
+        target_items = int(category.get("target_items", 500))
+        csv_path = dirs["raw_dir"] / f"{slugify(sub_category)}.csv"
+        started = time.time()
+        payload = run_channel_scraper(
+            endpoint=args.endpoint,
+            output_path=csv_path,
+            main_category=category["main_category"],
+            sub_category=sub_category,
+            max_items=target_items,
+            wait_ms=args.wait_ms,
         )
-        page = context.pages[0] if context.pages else context.new_page()
-        page.set_default_timeout(args.timeout)
-
-        try:
-            scraper.wait_until_ready(page, TARGET_URL, args.timeout)
-            for category in categories:
-                sub_category = category["sub_category"]
-                target_items = int(category.get("target_items", 500))
-                pages = max(math.ceil(target_items / 30) + 2, 1)
-                started = time.time()
-
-                page.goto(TARGET_URL, wait_until="domcontentloaded", timeout=args.timeout)
-                page.wait_for_load_state("networkidle", timeout=args.timeout)
-                scraper.apply_auto_filters(
-                    page,
-                    args.timeout,
-                    main_category=category["main_category"],
-                    sub_category=sub_category,
-                    listing_range=category.get("listing_range", "近7天上新"),
-                )
-                rows, page_stats = scraper.scrape_pages(
-                    page,
-                    args.timeout,
-                    main_category=category["main_category"],
-                    sub_category=sub_category,
-                    max_items=target_items,
-                    pages=pages,
-                )
-
-                csv_path = dirs["raw_dir"] / f"{slugify(sub_category)}.csv"
-                write_csv(rows, csv_path)
-                duration_seconds = round(time.time() - started, 1)
-                manifest["categories"].append(
-                    {
-                        "main_category": category["main_category"],
-                        "sub_category": sub_category,
-                        "target_items": target_items,
-                        "scraped_items": len(rows),
-                        "pages_requested": pages,
-                        "pages_used": len(page_stats),
-                        "duration_seconds": duration_seconds,
-                        "csv": str(csv_path.relative_to(dirs["run_dir"])),
-                        "page_stats": page_stats,
-                    }
-                )
-                print(f"[{sub_category}] scraped {len(rows)} items in {duration_seconds}s -> {csv_path}")
-        finally:
-            context.close()
+        duration_seconds = round(time.time() - started, 1)
+        page_stats = payload.get("pageStats", [])
+        manifest["categories"].append(
+            {
+                "main_category": category["main_category"],
+                "sub_category": sub_category,
+                "target_items": target_items,
+                "scraped_items": int(payload.get("total", 0)),
+                "pages_requested": max((target_items + 49) // 50, 1),
+                "pages_used": len(page_stats),
+                "duration_seconds": duration_seconds,
+                "csv": str(csv_path.relative_to(dirs["run_dir"])),
+                "debug": str(Path(payload.get("debug", csv_path.with_suffix(".debug.json"))).relative_to(dirs["run_dir"])),
+                "page_stats": page_stats,
+            }
+        )
+        print(f"[{sub_category}] scraped {payload.get('total', 0)} items in {duration_seconds}s -> {csv_path}")
 
     manifest["finished_at"] = datetime.now().isoformat(timespec="seconds")
     (dirs["run_dir"] / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -280,7 +215,7 @@ def read_csv_rows(csv_path: Path) -> list[dict[str, str]]:
 def dedupe_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
     deduped: dict[str, dict[str, str]] = {}
     for row in rows:
-        key = row.get("产品原链接") or f"{row.get('子类目', '')}|{row.get('商品名', '')}"
+        key = row.get("商品原链接") or row.get("产品原链接") or f"{row.get('类目', '')}|{row.get('商品名', '')}"
         deduped[key] = row
     return list(deduped.values())
 
@@ -292,29 +227,59 @@ def clean_supplier_name(value: str) -> str:
     noise_tokens = ["品质可靠退款低", "一件起订", "先采后付", "包邮", "回头率", "诚信通"]
     for token in noise_tokens:
         text = text.replace(token, " ")
-    text = re.sub(r"(^|\s)-+(?=\s|$)", " ", text)
-    text = re.sub(r"^[-\s]+|[-\s]+$", "", text)
-    return " ".join(text.split())
+    return " ".join(text.replace("-", " ").split())
+
+
+def split_category_path(value: str) -> tuple[str, str]:
+    parts = [part.strip() for part in str(value or "").split(">") if part.strip()]
+    if not parts:
+        return "", ""
+    if len(parts) == 1:
+        return parts[0], parts[0]
+    return parts[0], " > ".join(parts[1:])
 
 
 def build_products_payload(rows: list[dict[str, str]], generated_at: str) -> dict[str, Any]:
     products = []
     for row in rows:
+        if "类目" in row:
+            category, sub_category = split_category_path(row.get("类目", ""))
+            price = row.get("价格", "")
+            origin = row.get("所在地（近似）", "")
+            sales = row.get("年销量", "")
+            listed_time = row.get("上架时间", "")
+            image_url = row.get("商品图片链接", "")
+            product_url = row.get("商品原链接", "")
+            supplier = row.get("供货商", "")
+            title = row.get("商品名", "")
+        else:
+            category = row.get("大类目", "")
+            sub_category = row.get("子类目", "")
+            price = row.get("价格", "")
+            origin = row.get("发货地", "")
+            sales = row.get("90天内销量", "")
+            listed_time = row.get("上架时间", "")
+            image_url = row.get("图片链接", "")
+            product_url = row.get("产品原链接", "")
+            supplier = row.get("供应商", "")
+            title = row.get("商品名", "")
+
         products.append(
             {
-                "category": row.get("大类目", ""),
-                "subCategory": row.get("子类目", ""),
-                "title": row.get("商品名", ""),
-                "price": row.get("价格", ""),
-                "origin": row.get("发货地", ""),
-                "sales_90d": row.get("90天内销量", ""),
-                "listed_time": row.get("上架时间", ""),
-                "image_url": row.get("图片链接", ""),
-                "product_url": row.get("产品原链接", ""),
-                "sku": row.get("货号", ""),
-                "supplier_name": clean_supplier_name(row.get("供应商", "")),
+                "category": category,
+                "subCategory": sub_category,
+                "title": title,
+                "price": price,
+                "origin": origin,
+                "sales_90d": sales,
+                "annual_sales": sales,
+                "listed_time": listed_time,
+                "image_url": image_url,
+                "product_url": product_url,
+                "supplier_name": clean_supplier_name(supplier),
             }
         )
+
     return {"generated_at": generated_at, "total": len(products), "products": products}
 
 
@@ -329,10 +294,25 @@ def generate_json(run_dir: Path) -> Path:
     summary = {
         "raw_rows": len(rows),
         "deduped_rows": len(deduped),
-        "categories": len({row.get('子类目', '') for row in deduped}),
+        "categories": len({row.get('类目', row.get('子类目', '')) for row in deduped}),
     }
     (run_dir / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
     return output_path
+
+
+def build_data_js(categories: list[dict[str, Any]]) -> str:
+    payload = {
+        "categories": [
+            {
+                "id": f"cat-{index + 1}",
+                "name": item["sub_category"],
+                "description": f"{item['main_category']}类目，支持跳转查看商品列表。",
+            }
+            for index, item in enumerate(categories)
+        ],
+        "dataFile": "./products.json",
+    }
+    return "const APP_DATA = " + json.dumps(payload, ensure_ascii=False, indent=2) + ";\n"
 
 
 def build_site(run_dir: Path) -> Path:
@@ -341,6 +321,12 @@ def build_site(run_dir: Path) -> Path:
     for filename in SITE_FILES:
         shutil.copy2(ROOT / filename, site_dir / filename)
     shutil.copy2(run_dir / "products.json", site_dir / "products.json")
+    categories = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8-sig")).get("categories", [])
+    category_payload = [
+        {"main_category": item["main_category"], "sub_category": item["sub_category"]}
+        for item in categories
+    ]
+    (site_dir / DATA_FILE).write_text(build_data_js(category_payload), encoding="utf-8")
     return site_dir
 
 
@@ -370,6 +356,7 @@ def publish_site(run_dir: Path) -> Path:
     site_dir = build_site(run_dir)
     for filename in SITE_FILES:
         shutil.copy2(site_dir / filename, ROOT / filename)
+    shutil.copy2(site_dir / DATA_FILE, ROOT / DATA_FILE)
     shutil.copy2(site_dir / "products.json", ROOT / "products.json")
     return ROOT / "products.json"
 
@@ -396,7 +383,7 @@ def report_run(run_dir: Path) -> dict[str, Any]:
 
 def estimate_duration(categories_path: Path) -> dict[str, Any]:
     categories = load_categories(categories_path)
-    estimated_pages = sum(math.ceil(int(item.get("target_items", 500)) / 30) for item in categories)
+    estimated_pages = sum(max((int(item.get("target_items", 500)) + 49) // 50, 1) for item in categories)
     optimistic_minutes = round(estimated_pages * 8 / 60, 1)
     conservative_minutes = round(estimated_pages * 15 / 60, 1)
     return {
@@ -447,13 +434,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
-
-
-
-
-
-
-
-
-
