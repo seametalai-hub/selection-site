@@ -1,0 +1,1 @@
+{'checkboxExists': True, 'checkboxChecked': False, 'radios': [{'idx': 0, 'checked': False}, {'idx': 1, 'checked': False}], 'labels': [{'idx': 0, 'text': '全选[0/50]'}, {'idx': 1, 'text': '有销量[22]'}, {'idx': 2, 'text': '自定义[0]'}]}

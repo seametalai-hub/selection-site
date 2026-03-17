@@ -1,0 +1,17 @@
+node_modules/
+.playwright-1688-profile/
+chrome-1688-profile/
+__pycache__/
+*.pyc
+outputs/
+1688_auto_trial/exports/
+1688_auto_trial/downloads/
+1688_auto_trial/*.json
+1688_auto_trial/*.csv
+http8123.err
+http8123.out
+server.err
+server.out
+demo.zip
+demo (2).zip
+*.xlsx

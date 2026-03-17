@@ -1,0 +1,77 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>类目商品列表</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body data-page="products">
+    <div class="page-shell">
+      <header class="list-hero">
+        <div>
+          <a class="back-link" href="./index.html">返回类目</a>
+          <p class="eyebrow">Product Board</p>
+          <h1 id="categoryTitle">商品列表</h1>
+          <p id="categoryDescription" class="hero-copy"></p>
+        </div>
+        <div class="toolbar-card">
+          <label class="toolbar-label" for="sortSelect">排序</label>
+          <select id="sortSelect" class="sort-select">
+            <option value="newest">上架时间 晚-早</option>
+            <option value="oldest">上架时间 早-晚</option>
+            <option value="sales">90天销量 高-低</option>
+            <option value="priceAsc">价格 低-高</option>
+            <option value="priceDesc">价格 高-低</option>
+          </select>
+        </div>
+      </header>
+
+      <main>
+        <section class="import-panel">
+          <div>
+            <p class="section-kicker">V1 数据源</p>
+            <h2>自动读取 products.json</h2>
+            <p class="section-note" id="dataStatus">正在读取本地 JSON 数据...</p>
+          </div>
+          <div class="import-actions">
+            <div class="filter-grid">
+              <input id="searchInput" class="csv-input" type="search" placeholder="搜索商品名 / 供应商" />
+              <select id="originSelect" class="sort-select">
+                <option value="">全部发货地</option>
+              </select>
+              <input id="minPriceInput" class="csv-input" type="number" min="0" step="0.01" placeholder="最低价" />
+              <input id="maxPriceInput" class="csv-input" type="number" min="0" step="0.01" placeholder="最高价" />
+            </div>
+          </div>
+        </section>
+
+        <section class="stats-bar">
+          <div class="stat-box">
+            <span>当前类目</span>
+            <strong id="statCategory">-</strong>
+          </div>
+          <div class="stat-box">
+            <span>当前结果数</span>
+            <strong id="statCount">0</strong>
+          </div>
+          <div class="stat-box">
+            <span>数据日期</span>
+            <strong id="statDate">-</strong>
+          </div>
+        </section>
+
+        <section id="emptyState" class="empty-state" hidden>
+          <h2>这个类目暂时还没有商品</h2>
+          <p>当前 `products.json` 中没有匹配结果。</p>
+        </section>
+
+        <section id="productGrid" class="product-grid" aria-label="商品列表"></section>
+      </main>
+    </div>
+
+    <script src="./data.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>

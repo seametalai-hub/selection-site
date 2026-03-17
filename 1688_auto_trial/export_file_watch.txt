@@ -1,0 +1,7 @@
+BEFORE=C:\Users\seamt\Downloads\商品列表-1688采购助手2026-03-17_14_15_53.xlsx
+SELECT_STATE={'checked': True, 'labels': ['全选[50/50]', '有销量[22]', '自定义[0]'], 'exportBtnFound': True}
+CLICK=CLICKED
+FOUND=None
+LATEST_NOW=C:\Users\seamt\Downloads\商品列表-1688采购助手2026-03-17_14_15_53.xlsx
+LATEST_MTIME=1773728154.6350667
+LATEST_SIZE=9534615

@@ -1,0 +1,42 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>选品类目</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body data-page="categories">
+    <div class="page-shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Selection Hub</p>
+          <h1>汽车选品类目导航</h1>
+          <p class="hero-copy">
+            当前保留 12 个汽车用品类目，面向“近 7 天上新 + 有销量”的选品场景。点击类目进入商品列表页，支持后续批量更新与分发。
+          </p>
+        </div>
+        <div class="hero-panel">
+          <span>类目数</span>
+          <strong>12</strong>
+        </div>
+      </header>
+
+      <main>
+        <section class="section-head">
+          <div>
+            <p class="section-kicker">一级入口</p>
+            <h2>大类目</h2>
+          </div>
+          <p class="section-note">点击任意类目进入商品卡片页</p>
+        </section>
+
+        <section id="categoryGrid" class="category-grid" aria-label="类目列表"></section>
+      </main>
+    </div>
+
+    <script src="./data.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>

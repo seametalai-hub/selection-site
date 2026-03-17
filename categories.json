@@ -1,0 +1,86 @@
+﻿[
+  {
+    "enabled": true,
+    "main_category": "汽车用品",
+    "sub_category": "美容养护",
+    "target_items": 500,
+    "listing_range": "近7天上新"
+  },
+  {
+    "enabled": true,
+    "main_category": "汽车用品",
+    "sub_category": "汽车内饰用品",
+    "target_items": 500,
+    "listing_range": "近7天上新"
+  },
+  {
+    "enabled": true,
+    "main_category": "汽车用品",
+    "sub_category": "影音导航",
+    "target_items": 500,
+    "listing_range": "近7天上新"
+  },
+  {
+    "enabled": true,
+    "main_category": "汽车用品",
+    "sub_category": "摩托车配附件",
+    "target_items": 500,
+    "listing_range": "近7天上新"
+  },
+  {
+    "enabled": true,
+    "main_category": "汽车用品",
+    "sub_category": "座垫脚垫",
+    "target_items": 500,
+    "listing_range": "近7天上新"
+  },
+  {
+    "enabled": true,
+    "main_category": "汽车用品",
+    "sub_category": "外饰/改装/配件",
+    "target_items": 500,
+    "listing_range": "近7天上新"
+  },
+  {
+    "enabled": true,
+    "main_category": "汽车用品",
+    "sub_category": "安全/应急/自驾",
+    "target_items": 500,
+    "listing_range": "近7天上新"
+  },
+  {
+    "enabled": true,
+    "main_category": "汽车用品",
+    "sub_category": "车载电器",
+    "target_items": 500,
+    "listing_range": "近7天上新"
+  },
+  {
+    "enabled": true,
+    "main_category": "汽车用品",
+    "sub_category": "车身及附件",
+    "target_items": 500,
+    "listing_range": "近7天上新"
+  },
+  {
+    "enabled": true,
+    "main_category": "汽车用品",
+    "sub_category": "车灯",
+    "target_items": 500,
+    "listing_range": "近7天上新"
+  },
+  {
+    "enabled": true,
+    "main_category": "汽车用品",
+    "sub_category": "汽车配件",
+    "target_items": 500,
+    "listing_range": "近7天上新"
+  },
+  {
+    "enabled": true,
+    "main_category": "汽车用品",
+    "sub_category": "汽车内饰改装",
+    "target_items": 500,
+    "listing_range": "近7天上新"
+  }
+]

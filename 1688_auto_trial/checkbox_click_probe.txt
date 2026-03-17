@@ -1,0 +1,3 @@
+BEFORE={'checked': False, 'labels': ['全选[0/50]', '有销量[22]', '自定义[0]']}
+ACTION=CLICKED_INPUT
+AFTER={'checked': True, 'labels': ['全选[50/50]', '有销量[22]', '自定义[0]']}
