@@ -236,7 +236,9 @@ def split_category_path(value: str) -> tuple[str, str]:
         return "", ""
     if len(parts) == 1:
         return parts[0], parts[0]
-    return parts[0], " > ".join(parts[1:])
+    if len(parts) == 2:
+        return parts[0], parts[1]
+    return parts[0], parts[1]
 
 
 def build_products_payload(rows: list[dict[str, str]], generated_at: str) -> dict[str, Any]:
@@ -268,6 +270,7 @@ def build_products_payload(rows: list[dict[str, str]], generated_at: str) -> dic
             {
                 "category": category,
                 "subCategory": sub_category,
+                "detailCategory": row.get("类目", "") if "类目" in row else row.get("子类目", ""),
                 "title": title,
                 "price": price,
                 "origin": origin,

@@ -57,13 +57,8 @@
 
   const formatSales = (value) => String(value || "-");
 
-  const matchesCategory = (product, selectedCategory) => {
-    if (!selectedCategory) {
-      return true;
-    }
-    const subCategory = String(product.subCategory || "");
-    return subCategory === selectedCategory || subCategory.startsWith(`${selectedCategory} >`);
-  };
+  const matchesCategory = (product, selectedCategory) =>
+    !selectedCategory || String(product.subCategory || "") === selectedCategory;
 
   const renderCategories = () => {
     const grid = document.getElementById("categoryGrid");
@@ -92,7 +87,6 @@
           src="${product.image_url || buildFallbackImage()}"
           alt="${product.title || "未命名商品"}"
           loading="lazy"
-          referrerpolicy="no-referrer"
           onerror="this.onerror=null;this.src='${buildFallbackImage()}';"
         />
       </div>
