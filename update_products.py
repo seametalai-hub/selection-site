@@ -1,6 +1,7 @@
 ﻿import argparse
 import csv
 import json
+import re
 import shutil
 import subprocess
 import time
@@ -241,6 +242,25 @@ def split_category_path(value: str) -> tuple[str, str]:
     return parts[0], parts[1]
 
 
+def extract_date_key(value: str) -> tuple[int, int, int]:
+    match = re.search(r"(\d{4})[-/.](\d{2})[-/.](\d{2})", str(value or ""))
+    if not match:
+        return (0, 0, 0)
+    return (int(match.group(1)), int(match.group(2)), int(match.group(3)))
+
+
+def extract_sales_key(value: str) -> float:
+    match = re.search(r"(\d+(?:\.\d+)?)(\u4e07)?(\+)?", str(value or ""))
+    if not match:
+        return 0.0
+    base = float(match.group(1))
+    if match.group(2):
+        base *= 10000
+    if match.group(3):
+        base += 0.5
+    return base
+
+
 def build_products_payload(rows: list[dict[str, str]], generated_at: str) -> dict[str, Any]:
     products = []
     for row in rows:
@@ -283,6 +303,15 @@ def build_products_payload(rows: list[dict[str, str]], generated_at: str) -> dic
             }
         )
 
+    products.sort(
+        key=lambda item: (
+            item.get("subCategory", ""),
+            extract_date_key(item.get("listed_time", "")),
+            extract_sales_key(item.get("sales_90d", "")),
+        ),
+        reverse=True,
+    )
+
     return {"generated_at": generated_at, "total": len(products), "products": products}
 
 
@@ -303,7 +332,7 @@ def generate_json(run_dir: Path) -> Path:
     return output_path
 
 
-def build_data_js(categories: list[dict[str, Any]]) -> str:
+def build_data_js(categories: list[dict[str, Any]], data_version: str = "") -> str:
     payload = {
         "categories": [
             {
@@ -313,7 +342,7 @@ def build_data_js(categories: list[dict[str, Any]]) -> str:
             }
             for index, item in enumerate(categories)
         ],
-        "dataFile": "./products.json",
+        "dataFile": f"./products.json?v={data_version}" if data_version else "./products.json",
     }
     return "const APP_DATA = " + json.dumps(payload, ensure_ascii=False, indent=2) + ";\n"
 
@@ -338,7 +367,7 @@ def build_site(run_dir: Path) -> Path:
     for filename in SITE_FILES:
         shutil.copy2(ROOT / filename, site_dir / filename)
     shutil.copy2(run_dir / "products.json", site_dir / "products.json")
-    (site_dir / DATA_FILE).write_text(build_data_js(load_site_categories(run_dir)), encoding="utf-8")
+    (site_dir / DATA_FILE).write_text(build_data_js(load_site_categories(run_dir), json.loads((run_dir / "products.json").read_text(encoding="utf-8-sig")).get("generated_at", "")), encoding="utf-8")
     return site_dir
 
 

@@ -61,5 +61,5 @@ const APP_DATA = {
       "description": "汽车用品类目，支持跳转查看商品列表。"
     }
   ],
-  "dataFile": "./products.json"
+  "dataFile": "./products.json?v=2026-03-20"
 };

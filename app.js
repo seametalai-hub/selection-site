@@ -15,15 +15,21 @@
 
   const normalizeDateText = (value) => String(value || "").replace(/\s*上架$/, "").trim();
 
+  const extractDateText = (value) => {
+    const match = normalizeDateText(value).replace(/\//g, "-").match(/\d{4}-\d{2}-\d{2}/);
+    return match ? match[0] : "";
+  };
+
   const toDateValue = (value) => {
-    const normalized = normalizeDateText(value).replace(/\//g, "-");
-    const date = new Date(normalized);
+    const normalized = extractDateText(value);
+    const date = normalized ? new Date(`${normalized}T00:00:00`) : new Date("");
     return Number.isNaN(date.getTime()) ? 0 : date.getTime();
   };
 
   const formatDate = (value) => {
     const text = normalizeDateText(value);
-    const date = new Date(text.replace(/\//g, "-"));
+    const dateText = extractDateText(text);
+    const date = dateText ? new Date(`${dateText}T00:00:00`) : new Date("");
     if (Number.isNaN(date.getTime())) {
       return text || "-";
     }
@@ -87,6 +93,7 @@
           src="${product.image_url || buildFallbackImage()}"
           alt="${product.title || "未命名商品"}"
           loading="lazy"
+          referrerpolicy="no-referrer"
           onerror="this.onerror=null;this.src='${buildFallbackImage()}';"
         />
       </div>
