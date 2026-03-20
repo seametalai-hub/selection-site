@@ -39,6 +39,13 @@ function parseArgs(argv) {
   return args;
 }
 
+function toUnicodeEscape(value) {
+  return Array.from(String(value || "")).map((char) => {
+    const code = char.charCodeAt(0);
+    return code > 127 ? `\\u${code.toString(16).padStart(4, "0")}` : char;
+  }).join("");
+}
+
 async function fetchJson(url) {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`HTTP ${response.status} for ${url}`);
@@ -94,28 +101,16 @@ function toCsv(rows, headers) {
   }
   return `\uFEFF${lines.join("\r\n")}\r\n`;
 }
-function toUnicodeEscape(value) {
-  return Array.from(String(value || "")).map((char) => {
-    const code = char.charCodeAt(0);
-    return code > 127 ? `\\u${code.toString(16).padStart(4, "0")}` : char;
-  }).join("");
-}
-
 
 async function main() {
   const args = parseArgs(process.argv);
+  const mainCategoryText = toUnicodeEscape(args.mainCategory);
+  const subCategoryText = toUnicodeEscape(args.subCategory);
+  const sortText = toUnicodeEscape(args.sortText);
   const { ws, send } = await connectToPage(args.endpoint, "air.1688.com/app/channel-fe/search/index.html");
 
   try {
-    const state = {
-      mainCategory: toUnicodeEscape(args.mainCategory),
-      subCategory: toUnicodeEscape(args.subCategory),
-      sortText: toUnicodeEscape(args.sortText),
-      waitMs: args.waitMs,
-      pageSize: args.pageSize,
-    };
-
-    const setupExpression = `((async (state) => {
+    const setupExpression = `((async () => {
       const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
       const normalize = (text) => (text || '').replace(/\\u00a0/g, ' ').replace(/\\s+/g, ' ').trim();
       const isVisible = (el) => {
@@ -124,78 +119,31 @@ async function main() {
         const rect = el.getBoundingClientRect();
         return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
       };
-      const parseDateOnly = (text) => {
-        const match = normalize(text).match(/(\\d{4})[-/.](\\d{2})[-/.](\\d{2})/);
-        return match ? (match[1] + '-' + match[2] + '-' + match[3]) : '';
-      };
-      const extractTaggedValue = (source, labels, endLabels) => {
-        const text = normalize(source);
-        for (const label of labels) {
-          const index = text.indexOf(label);
-          if (index === -1) continue;
-          let value = text.slice(index + label.length);
-          let endPos = value.length;
-          for (const endLabel of endLabels) {
-            const endIndex = value.indexOf(endLabel);
-            if (endIndex !== -1 && endIndex < endPos) endPos = endIndex;
-          }
-          value = normalize(value.slice(0, endPos).replace(/^[:\\uFF1A]\\s*/, ''));
-          if (value) return value;
-        }
-        return '';
-      };
-      const getPluginSource = (card) => {
-        const pluginText = normalize(card.querySelector('.plugin-offer-search-card')?.textContent || '');
-        const fullText = normalize(card.innerText || '');
-        return pluginText || fullText;
-      };
-      const getListedTimeText = (card) => {
-        const value = extractTaggedValue(
-          getPluginSource(card),
-          ['\\u4e0a\\u67b6\\u65e5\\u671f', '\\u4e0a\\u67b6\\u65f6\\u95f4'],
-          ['\\u8bc4\\u8bba\\u6570', '\\u5f00\\u5e97', '\\u7c7b\\u76ee', '\\u5e74\\u9500\\u91cf'],
-        );
-        return /^\\d{4}[-/.]\\d{2}[-/.]\\d{2}/.test(value) ? value : '';
-      };
-      const getTopDates = () => Array.from(document.querySelectorAll('a.fx-offer-card[href*="detail.1688.com/offer/"]'))
-        .slice(0, 8)
-        .map((card) => parseDateOnly(getListedTimeText(card)))
-        .filter(Boolean);
-      const isDescending = (dates) => {
-        if (dates.length < 2) return false;
-        for (let i = 1; i < dates.length; i += 1) {
-          if (dates[i - 1] < dates[i]) return false;
-        }
-        return true;
-      };
-
-      window.scrollTo({ top: 0, behavior: 'instant' });
-      await sleep(400);
-
-      const main = Array.from(document.querySelectorAll('span.category-item__trigger'))
-        .find((el) => normalize(el.textContent) === '${toUnicodeEscape(args.mainCategory)}' && isVisible(el));
-      if (!main) throw new Error('main category not found: ${toUnicodeEscape(args.mainCategory)}');
+      const main = Array.from(document.querySelectorAll('span.category-item__trigger')).find(
+        (el) => normalize(el.textContent) === '${mainCategoryText}' && isVisible(el),
+      );
+      if (!main) throw new Error('main category not found');
       main.scrollIntoView({ block: 'center' });
       for (const type of ['mouseenter', 'mouseover', 'mousedown', 'mouseup', 'click']) {
         main.dispatchEvent(new MouseEvent(type, { bubbles: true }));
       }
       await sleep(1200);
-      const sub = Array.from(document.querySelectorAll('.fx-cascader-menu-item'))
-        .find((el) => normalize(el.textContent) === '${toUnicodeEscape(args.subCategory)}' && isVisible(el));
-      if (!sub) throw new Error('sub category not found: ${toUnicodeEscape(args.subCategory)}');
+
+      const sub = Array.from(document.querySelectorAll('.fx-cascader-menu-item')).find(
+        (el) => normalize(el.textContent) === '${subCategoryText}' && isVisible(el),
+      );
+      if (!sub) throw new Error('sub category not found');
       sub.scrollIntoView({ block: 'center' });
       for (const type of ['pointerdown', 'mousedown', 'mouseup', 'click']) {
         sub.dispatchEvent(new MouseEvent(type, { bubbles: true }));
       }
       await sleep(2500);
 
-      const sort = Array.from(document.querySelectorAll('.sort-filter-trigger'))
-        .find((el) => normalize(el.textContent) === '${toUnicodeEscape(args.sortText)}' && isVisible(el));
-      if (!sort) throw new Error('sort trigger not found: ${toUnicodeEscape(args.sortText)}');
-      for (let attempt = 0; attempt < 3; attempt += 1) {
-        const sortClass = String(sort.className || '');
-        const topDates = getTopDates();
-        if (sortClass.includes('actived') && isDescending(topDates)) break;
+      const sort = Array.from(document.querySelectorAll('.sort-filter-trigger')).find(
+        (el) => normalize(el.textContent) === '${sortText}' && isVisible(el),
+      );
+      if (!sort) throw new Error('sort trigger not found');
+      if (!String(sort.className || '').includes('actived')) {
         sort.click();
         await sleep(2500);
       }
@@ -212,15 +160,14 @@ async function main() {
           if (active === '1' && firstHref && firstHref !== previousFirstHref) break;
           await sleep(300);
         }
-        await sleep(state.waitMs);
+        await sleep(${args.waitMs});
       }
 
       return {
         activePage: normalize(document.querySelector('.ant-pagination-item-active')?.textContent || ''),
         sortClass: String(sort.className || ''),
-        topDates: getTopDates(),
       };
-    })(JSON.parse(${JSON.stringify(JSON.stringify(state))})))`;
+    })())`;
 
     const setupResult = await send("Runtime.evaluate", {
       expression: setupExpression,
@@ -231,45 +178,26 @@ async function main() {
       throw new Error(setupResult.result?.description || "setup expression failed");
     }
 
-    const waitReadyExpression = `((async (state) => {
-      const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    const waitReadyExpression = `(() => {
       const normalize = (text) => (text || '').replace(/\\u00a0/g, ' ').replace(/\\s+/g, ' ').trim();
-      const collect = () => {
-        const cards = Array.from(document.querySelectorAll('a.fx-offer-card[href*="detail.1688.com/offer/"]')).slice(0, state.pageSize);
-        const rows = cards.map((card) => {
-          const pluginText = normalize(card.querySelector('.plugin-offer-search-card')?.textContent || '');
-          const fullText = normalize(card.innerText || '');
-          return {
-            plugin: !!pluginText,
-            listed: pluginText.includes('\\u4e0a\\u67b6\\u65e5\\u671f') || fullText.includes('\\u4e0a\\u67b6\\u65e5\\u671f'),
-            sales: pluginText.includes('\\u5e74\\u9500\\u91cf') || fullText.includes('\\u5e74\\u9500\\u91cf'),
-          };
-        });
+      const cards = Array.from(document.querySelectorAll('a.fx-offer-card[href*="detail.1688.com/offer/"]')).slice(0, ${args.pageSize});
+      const rows = cards.map((card) => {
+        const pluginText = normalize(card.querySelector('.plugin-offer-search-card')?.textContent || '');
+        const fullText = normalize(card.innerText || '');
         return {
-          pageCurrent: normalize(document.querySelector('.ant-pagination-item-active')?.textContent || '1'),
-          total: rows.length,
-          pluginCount: rows.filter((row) => row.plugin).length,
-          listedCount: rows.filter((row) => row.listed).length,
-          salesCount: rows.filter((row) => row.sales).length,
+          plugin: !!pluginText,
+          listed: pluginText.includes('\\u4e0a\\u67b6\\u65e5\\u671f') || fullText.includes('\\u4e0a\\u67b6\\u65e5\\u671f'),
+          sales: pluginText.includes('\\u5e74\\u9500\\u91cf') || fullText.includes('\\u5e74\\u9500\\u91cf'),
         };
+      });
+      return {
+        pageCurrent: normalize(document.querySelector('.ant-pagination-item-active')?.textContent || '1'),
+        total: rows.length,
+        pluginCount: rows.filter((row) => row.plugin).length,
+        listedCount: rows.filter((row) => row.listed).length,
+        salesCount: rows.filter((row) => row.sales).length,
       };
-
-      let snapshot = collect();
-      const started = Date.now();
-      while (Date.now() - started < state.waitMs) {
-        snapshot = collect();
-        if (
-          snapshot.total >= state.pageSize &&
-          snapshot.pluginCount >= Math.max(state.pageSize - 5, 1) &&
-          snapshot.listedCount >= Math.max(state.pageSize - 5, 1) &&
-          snapshot.salesCount >= Math.max(state.pageSize - 5, 1)
-        ) {
-          return { ok: true, snapshot };
-        }
-        await sleep(500);
-      }
-      return { ok: false, snapshot };
-    })(JSON.parse(${JSON.stringify(JSON.stringify(state))})))`;
+    })()`;
 
     const extractExpression = `(() => {
       const normalize = (text) => (text || '').replace(/\\u00a0/g, ' ').replace(/\\s+/g, ' ').trim();
@@ -308,6 +236,11 @@ async function main() {
         const fullText = normalize(card.innerText || '');
         return pluginText || fullText;
       };
+      const getCardData = (card) => {
+        const raw = card.querySelector('channel-toolbox-batch-distribute-pro-select-btn')?.getAttribute('data') || '';
+        if (!raw) return null;
+        try { return JSON.parse(raw); } catch { return null; }
+      };
       const getListedTimeText = (card) => {
         const value = extractTaggedValue(
           getPluginSource(card),
@@ -326,32 +259,27 @@ async function main() {
         return value.replace(/^\\u91cf[:\\uFF1A]?/, '');
       };
 
+      const sort = Array.from(document.querySelectorAll('.sort-filter-trigger')).find((el) => normalize(el.textContent) === '${sortText}');
       const cards = Array.from(document.querySelectorAll('a.fx-offer-card[href*="detail.1688.com/offer/"]')).slice(0, ${args.pageSize});
       const pageCurrent = normalize(document.querySelector('.ant-pagination-item-active')?.textContent || '1');
-      const sort = Array.from(document.querySelectorAll('.sort-filter-trigger')).find((el) => normalize(el.textContent) === ${JSON.stringify(args.sortText)});
-
       return {
+        sortClass: sort ? String(sort.className || '') : '',
         pageCurrent,
         firstHref: cards[0]?.href || '',
-        sortClass: sort ? String(sort.className || '') : '',
         rows: cards.map((card) => {
-          const title = normalize(card.querySelector('.offer-body__title')?.textContent || card.getAttribute('title') || '');
-          const supplier = normalize(card.querySelector('.shop-name, .company-name')?.textContent || '');
+          const cardData = getCardData(card);
+          const title = normalize(card.querySelector('.offer-body__title')?.textContent || card.getAttribute('title') || cardData?.title || '');
+          const supplier = normalize(card.querySelector('.shop-name, .company-name')?.textContent || cardData?.memberInfo?.companyName || '');
           const image = card.querySelector('img.offer-header__image, img[data-src], img');
-          const imageUrl = image?.currentSrc || image?.getAttribute('src') || image?.getAttribute('data-src') || '';
-          const price = normalize(card.querySelector('.fx-offer-card-v2-price, .price-now')?.textContent || '').replace(/^\\uFFE5\\s*/, '');
+          const imageUrl = image?.currentSrc || image?.getAttribute('src') || image?.getAttribute('data-src') || cardData?.offerPic || '';
+          const price = normalize(card.querySelector('.fx-offer-card-v2-price, .price-now')?.textContent || '').replace(/^\\uFFE5\\s*/, '') || normalize(cardData?.price || '');
           const deliveryInfo = normalize(card.querySelector('.fx-offer-card-v2-delivery-info')?.textContent || '');
           const source = getPluginSource(card);
-          const categoryText = extractTaggedValue(
-            source,
-            ['\\u7c7b\\u76ee'],
-            ['\\u5e74\\u9500\\u91cf', '\\u5e74\\u9500', '\\u5e74\\u552e', '\\u4e0a\\u67b6\\u65e5\\u671f', '\\u4e0a\\u67b6\\u65f6\\u95f4', '\\u8bc4\\u8bba\\u6570', '\\u5f00\\u5e97'],
-          );
           return {
             page: pageCurrent,
-            category: normalize(categoryText || (${JSON.stringify(args.mainCategory)} + ' > ' + ${JSON.stringify(args.subCategory)})),
+            category: normalize('${subCategoryText}'),
             title,
-            listedTime: getListedTimeText(card),
+            listedTime: getListedTimeText(card) || normalize(cardData?.postDate || '').slice(0, 10),
             annualSales: getAnnualSales(card),
             productUrl: card.href || '',
             imageUrl,
@@ -368,38 +296,28 @@ async function main() {
     const pageStats = [];
 
     for (let pageIndex = 1; pageIndex <= args.pages && rows.length < args.maxItems; pageIndex += 1) {
-      const readyResult = await send("Runtime.evaluate", {
-        expression: waitReadyExpression,
-        awaitPromise: true,
-        returnByValue: true,
-      });
-      if (readyResult.exceptionDetails) {
-        throw new Error(readyResult.result?.description || "waitReady expression failed");
-      }
-      const ready = readyResult.result?.value;
-      if (!ready?.ok) {
-        throw new Error(`plugin fields not ready: ${JSON.stringify(ready?.snapshot || {})}`);
-      }
+      await new Promise((resolve) => setTimeout(resolve, args.waitMs));
+      const readyResult = await send("Runtime.evaluate", { expression: waitReadyExpression, returnByValue: true });
+      const ready = readyResult.result?.value || {};
 
-      const extractResult = await send("Runtime.evaluate", {
-        expression: extractExpression,
-        returnByValue: true,
-      });
-      if (extractResult.exceptionDetails) {
-        throw new Error(extractResult.result?.description || "extract expression failed");
-      }
+      const extractResult = await send("Runtime.evaluate", { expression: extractExpression, returnByValue: true });
+      if (extractResult.exceptionDetails) throw new Error(extractResult.result?.description || "extract expression failed");
       const payload = extractResult.result?.value;
       if (!payload?.rows?.length) throw new Error(`no rows extracted on loop ${pageIndex}`);
-      if (!String(payload.sortClass || "").includes("actived")) {
-        throw new Error(`sort is not active on page ${payload.pageCurrent}`);
+      if (!String(payload.sortClass || '').includes('actived')) {
+        throw new Error(`sort not active on page ${payload.pageCurrent}: ${payload.sortClass || '<empty>'}`);
       }
 
       let added = 0;
       let listedNonEmpty = 0;
       let salesNonEmpty = 0;
+      let imageNonEmpty = 0;
+      let categoryNonEmpty = 0;
       for (const row of payload.rows) {
         if (row.listedTime) listedNonEmpty += 1;
         if (row.annualSales) salesNonEmpty += 1;
+        if (row.imageUrl) imageNonEmpty += 1;
+        if (row.category && row.category !== '-') categoryNonEmpty += 1;
         const key = row.productUrl;
         if (!key || seen.has(key)) continue;
         seen.add(key);
@@ -413,12 +331,12 @@ async function main() {
         added,
         listedNonEmpty,
         salesNonEmpty,
-        firstDate: payload.rows[0].listedTime || "",
-        readySnapshot: ready.snapshot,
+        imageNonEmpty,
+        categoryNonEmpty,
+        firstDate: payload.rows[0].listedTime || '',
+        readySnapshot: ready,
       });
-      console.error(
-        `page=${payload.pageCurrent} added=${added} listed=${listedNonEmpty}/${payload.rows.length} sales=${salesNonEmpty}/${payload.rows.length} first=${payload.rows[0].listedTime || "-"}`,
-      );
+      console.error(`page=${payload.pageCurrent} added=${added} listed=${listedNonEmpty}/${payload.rows.length} image=${imageNonEmpty}/${payload.rows.length} category=${categoryNonEmpty}/${payload.rows.length} sales=${salesNonEmpty}/${payload.rows.length} first=${payload.rows[0].listedTime || '-'}`);
 
       if (pageIndex >= args.pages || rows.length >= args.maxItems) break;
 
@@ -445,19 +363,9 @@ async function main() {
           }
         }, 300);
       }))(${JSON.stringify(payload.firstHref)}, ${args.waitMs})`;
-
-      const nextResult = await send("Runtime.evaluate", {
-        expression: nextExpression,
-        awaitPromise: true,
-        returnByValue: true,
-      });
-      if (nextResult.exceptionDetails) {
-        throw new Error(nextResult.result?.description || "next expression failed");
-      }
+      const nextResult = await send("Runtime.evaluate", { expression: nextExpression, awaitPromise: true, returnByValue: true });
       const nextPayload = nextResult.result?.value;
-      if (!nextPayload?.ok) {
-        throw new Error(`next page failed after ${payload.pageCurrent}: ${nextPayload?.reason || "unknown"}`);
-      }
+      if (!nextPayload?.ok) throw new Error(`next page failed after ${payload.pageCurrent}: ${nextPayload?.reason || 'unknown'}`);
     }
 
     const outputPath = path.resolve(args.output);
@@ -477,12 +385,7 @@ async function main() {
     }));
     fs.writeFileSync(outputPath, toCsv(csvRows, headers), "utf8");
     const debugPath = outputPath.replace(/\.csv$/i, ".debug.json");
-    fs.writeFileSync(
-      debugPath,
-      JSON.stringify({ setup: setupResult.result?.value || {}, total: rows.length, pageStats }, null, 2),
-      "utf8",
-    );
-
+    fs.writeFileSync(debugPath, JSON.stringify({ total: rows.length, pageStats }, null, 2), "utf8");
     console.log(JSON.stringify({ output: outputPath, debug: debugPath, total: rows.length, pageStats }, null, 2));
   } finally {
     ws.close();
@@ -493,7 +396,6 @@ main().catch((error) => {
   console.error(error.stack || String(error));
   process.exit(1);
 });
-
 
 
 

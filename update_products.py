@@ -318,18 +318,27 @@ def build_data_js(categories: list[dict[str, Any]]) -> str:
     return "const APP_DATA = " + json.dumps(payload, ensure_ascii=False, indent=2) + ";\n"
 
 
+def load_site_categories(run_dir: Path) -> list[dict[str, Any]]:
+    manifest_path = run_dir / "manifest.json"
+    if manifest_path.exists():
+        categories = json.loads(manifest_path.read_text(encoding="utf-8-sig")).get("categories", [])
+        return [
+            {"main_category": item["main_category"], "sub_category": item["sub_category"]}
+            for item in categories
+        ]
+    return [
+        {"main_category": item["main_category"], "sub_category": item["sub_category"]}
+        for item in load_categories(CATEGORIES_PATH)
+    ]
+
+
 def build_site(run_dir: Path) -> Path:
     site_dir = run_dir / "site"
     site_dir.mkdir(parents=True, exist_ok=True)
     for filename in SITE_FILES:
         shutil.copy2(ROOT / filename, site_dir / filename)
     shutil.copy2(run_dir / "products.json", site_dir / "products.json")
-    categories = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8-sig")).get("categories", [])
-    category_payload = [
-        {"main_category": item["main_category"], "sub_category": item["sub_category"]}
-        for item in categories
-    ]
-    (site_dir / DATA_FILE).write_text(build_data_js(category_payload), encoding="utf-8")
+    (site_dir / DATA_FILE).write_text(build_data_js(load_site_categories(run_dir)), encoding="utf-8")
     return site_dir
 
 
