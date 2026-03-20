@@ -39,7 +39,18 @@
   };
 
   const toPrice = (value) => {
-    const amount = Number(String(value || "").replace(/[¥￥,\s]/g, ""));
+    const text = String(value || "").replace(/[¥￥,\s]/g, "");
+    const direct = Number(text);
+    if (Number.isFinite(direct)) {
+      return direct;
+    }
+
+    const match = text.match(/\d+(?:\.\d+)?/);
+    if (!match) {
+      return 0;
+    }
+
+    const amount = Number(match[0]);
     return Number.isFinite(amount) ? amount : 0;
   };
 
