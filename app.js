@@ -57,6 +57,14 @@
 
   const formatSales = (value) => String(value || "-");
 
+  const matchesCategory = (product, selectedCategory) => {
+    if (!selectedCategory) {
+      return true;
+    }
+    const subCategory = String(product.subCategory || "");
+    return subCategory === selectedCategory || subCategory.startsWith(`${selectedCategory} >`);
+  };
+
   const renderCategories = () => {
     const grid = document.getElementById("categoryGrid");
     if (!grid) {
@@ -201,7 +209,7 @@
     const emptyState = document.getElementById("emptyState");
     const grid = document.getElementById("productGrid");
 
-    let result = state.allProducts.filter((item) => !currentCategory || item.subCategory === currentCategory);
+    let result = state.allProducts.filter((item) => matchesCategory(item, currentCategory));
 
     if (searchValue) {
       result = result.filter((item) =>
@@ -259,7 +267,7 @@
     const payload = await response.json();
     state.generatedAt = payload.generated_at || "";
     state.allProducts = Array.isArray(payload.products) ? payload.products : [];
-    fillOriginOptions(state.allProducts.filter((item) => !currentCategory || item.subCategory === currentCategory));
+    fillOriginOptions(state.allProducts.filter((item) => matchesCategory(item, currentCategory)));
     applyFilters();
   };
 
