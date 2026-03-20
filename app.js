@@ -131,7 +131,13 @@
   const sortProducts = (products, sortType) => {
     const list = [...products];
     if (sortType === "oldest") {
-      list.sort((a, b) => toDateValue(a.listed_time) - toDateValue(b.listed_time));
+      list.sort((a, b) => {
+        const dateGap = toDateValue(a.listed_time) - toDateValue(b.listed_time);
+        if (dateGap !== 0) {
+          return dateGap;
+        }
+        return toSales(b.sales_90d) - toSales(a.sales_90d);
+      });
       return list;
     }
     if (sortType === "sales") {
@@ -146,7 +152,13 @@
       list.sort((a, b) => toPrice(b.price) - toPrice(a.price));
       return list;
     }
-    list.sort((a, b) => toDateValue(b.listed_time) - toDateValue(a.listed_time));
+    list.sort((a, b) => {
+      const dateGap = toDateValue(b.listed_time) - toDateValue(a.listed_time);
+      if (dateGap !== 0) {
+        return dateGap;
+      }
+      return toSales(b.sales_90d) - toSales(a.sales_90d);
+    });
     return list;
   };
 
