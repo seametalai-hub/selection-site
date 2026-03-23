@@ -8,6 +8,8 @@
     allProducts: [],
     filteredProducts: [],
     generatedAt: "",
+    currentPage: 1,
+    pageSize: 50,
   };
 
   const buildFallbackImage = () =>
@@ -133,6 +135,69 @@
     </article>
   `;
 
+  const getTotalPages = () => Math.max(Math.ceil(state.filteredProducts.length / state.pageSize), 1);
+
+  const setCurrentPage = (page) => {
+    state.currentPage = Math.min(Math.max(page, 1), getTotalPages());
+  };
+
+  const buildPaginationItems = (currentPage, totalPages) => {
+    const pages = new Set([1, totalPages, currentPage - 1, currentPage, currentPage + 1]);
+    if (currentPage <= 3) {
+      pages.add(2);
+      pages.add(3);
+    }
+    if (currentPage >= totalPages - 2) {
+      pages.add(totalPages - 1);
+      pages.add(totalPages - 2);
+    }
+    return [...pages]
+      .filter((value) => value >= 1 && value <= totalPages)
+      .sort((a, b) => a - b);
+  };
+
+  const renderPagination = () => {
+    const pager = document.getElementById("paginationBar");
+    const pagerInfo = document.getElementById("paginationInfo");
+    if (!pager || !pagerInfo) {
+      return;
+    }
+
+    if (!state.filteredProducts.length) {
+      pager.hidden = true;
+      pagerInfo.textContent = "";
+      return;
+    }
+
+    const totalPages = getTotalPages();
+    const start = (state.currentPage - 1) * state.pageSize + 1;
+    const end = Math.min(state.currentPage * state.pageSize, state.filteredProducts.length);
+    pager.hidden = false;
+    pagerInfo.textContent = `第 ${state.currentPage} / ${totalPages} 页 · 当前显示 ${start}-${end} / ${state.filteredProducts.length}`;
+
+    const items = buildPaginationItems(state.currentPage, totalPages);
+    const parts = [
+      `<button class="pager-btn" data-page="${state.currentPage - 1}" ${state.currentPage === 1 ? "disabled" : ""}>上一页</button>`,
+    ];
+
+    let previous = 0;
+    for (const page of items) {
+      if (page - previous > 1) {
+        parts.push('<span class="pager-gap">...</span>');
+      }
+      parts.push(
+        `<button class="pager-btn ${page === state.currentPage ? "is-active" : ""}" data-page="${page}">${page}</button>`
+      );
+      previous = page;
+    }
+
+    parts.push(
+      `<button class="pager-btn" data-page="${state.currentPage + 1}" ${state.currentPage === totalPages ? "disabled" : ""}>下一页</button>`
+    );
+
+    pager.innerHTML = parts.join("");
+  };
+
   const fillOriginOptions = (products) => {
     const select = document.getElementById("originSelect");
     if (!select) {
@@ -242,6 +307,7 @@
     }
 
     state.filteredProducts = sortProducts(result, sortType);
+    setCurrentPage(1);
     updateHeader(state.filteredProducts.length);
 
     if (!grid || !emptyState) {
@@ -251,11 +317,34 @@
     if (!state.filteredProducts.length) {
       emptyState.hidden = false;
       grid.innerHTML = "";
+      renderPagination();
       return;
     }
 
     emptyState.hidden = true;
-    grid.innerHTML = state.filteredProducts.map(buildProductCard).join("");
+    const startIndex = (state.currentPage - 1) * state.pageSize;
+    const pageItems = state.filteredProducts.slice(startIndex, startIndex + state.pageSize);
+    grid.innerHTML = pageItems.map(buildProductCard).join("");
+    renderPagination();
+  };
+
+  const renderCurrentPage = () => {
+    const grid = document.getElementById("productGrid");
+    const emptyState = document.getElementById("emptyState");
+    if (!grid || !emptyState) {
+      return;
+    }
+    if (!state.filteredProducts.length) {
+      emptyState.hidden = false;
+      grid.innerHTML = "";
+      renderPagination();
+      return;
+    }
+    emptyState.hidden = true;
+    const startIndex = (state.currentPage - 1) * state.pageSize;
+    const pageItems = state.filteredProducts.slice(startIndex, startIndex + state.pageSize);
+    grid.innerHTML = pageItems.map(buildProductCard).join("");
+    renderPagination();
   };
 
   const bindFilters = () => {
@@ -269,6 +358,23 @@
         element.addEventListener("input", applyFilters);
       }
     });
+
+    const pager = document.getElementById("paginationBar");
+    if (pager) {
+      pager.addEventListener("click", (event) => {
+        const button = event.target.closest("[data-page]");
+        if (!button) {
+          return;
+        }
+        const nextPage = Number(button.getAttribute("data-page"));
+        if (!Number.isFinite(nextPage)) {
+          return;
+        }
+        setCurrentPage(nextPage);
+        renderCurrentPage();
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      });
+    }
   };
 
   const loadProducts = async () => {

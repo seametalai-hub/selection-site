@@ -221,6 +221,61 @@ h1 {
   gap: 18px;
 }
 
+.pagination-section {
+  margin-top: 24px;
+}
+
+.pagination-info {
+  margin-bottom: 12px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.pagination-bar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+.pager-btn,
+.pager-gap {
+  min-width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 16px;
+  font-weight: 700;
+}
+
+.pager-btn {
+  cursor: pointer;
+}
+
+.pager-btn:hover:not(:disabled) {
+  border-color: rgba(182, 70, 47, 0.35);
+}
+
+.pager-btn.is-active {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
+.pager-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.pager-gap {
+  border-style: dashed;
+}
+
 .product-card {
   border-radius: 24px;
   overflow: hidden;

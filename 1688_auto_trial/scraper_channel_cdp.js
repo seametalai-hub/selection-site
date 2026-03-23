@@ -17,6 +17,7 @@ function parseArgs(argv) {
     pages: 10,
     pageSize: 50,
     waitMs: 5000,
+    stopDays: 7,
   };
 
   for (let i = 2; i < argv.length; i += 2) {
@@ -33,6 +34,7 @@ function parseArgs(argv) {
     if (key === "--pages") args.pages = Number(value) || args.pages;
     if (key === "--page-size") args.pageSize = Number(value) || args.pageSize;
     if (key === "--wait-ms") args.waitMs = Number(value) || args.waitMs;
+    if (key === "--stop-days") args.stopDays = Number(value) || args.stopDays;
   }
 
   args.pages = Math.max(args.pages, Math.ceil(args.maxItems / args.pageSize));
@@ -100,6 +102,13 @@ function toCsv(rows, headers) {
     lines.push(headers.map((header) => csvEscape(row[header] || "")).join(","));
   }
   return `\uFEFF${lines.join("\r\n")}\r\n`;
+}
+
+function extractAgeDays(value) {
+  const parts = String(value || "").match(/\d+/g);
+  if (!parts || parts.length < 4) return null;
+  const age = Number(parts[parts.length - 1]);
+  return Number.isFinite(age) ? age : null;
 }
 
 async function main() {
@@ -294,6 +303,7 @@ async function main() {
     const rows = [];
     const seen = new Set();
     const pageStats = [];
+    let stopReason = "";
 
     for (let pageIndex = 1; pageIndex <= args.pages && rows.length < args.maxItems; pageIndex += 1) {
       await new Promise((resolve) => setTimeout(resolve, args.waitMs));
@@ -313,11 +323,21 @@ async function main() {
       let salesNonEmpty = 0;
       let imageNonEmpty = 0;
       let categoryNonEmpty = 0;
+      let oldestAgeOnPage = null;
+      let stopAfterPage = false;
       for (const row of payload.rows) {
+        const ageDays = extractAgeDays(row.listedTime);
+        if (ageDays != null) {
+          oldestAgeOnPage = oldestAgeOnPage == null ? ageDays : Math.max(oldestAgeOnPage, ageDays);
+        }
         if (row.listedTime) listedNonEmpty += 1;
         if (row.annualSales) salesNonEmpty += 1;
         if (row.imageUrl) imageNonEmpty += 1;
         if (row.category && row.category !== '-') categoryNonEmpty += 1;
+        if (ageDays != null && ageDays > args.stopDays) {
+          stopAfterPage = true;
+          continue;
+        }
         const key = row.productUrl;
         if (!key || seen.has(key)) continue;
         seen.add(key);
@@ -334,9 +354,15 @@ async function main() {
         imageNonEmpty,
         categoryNonEmpty,
         firstDate: payload.rows[0].listedTime || '',
+        oldestAgeOnPage,
         readySnapshot: ready,
       });
       console.error(`page=${payload.pageCurrent} added=${added} listed=${listedNonEmpty}/${payload.rows.length} image=${imageNonEmpty}/${payload.rows.length} category=${categoryNonEmpty}/${payload.rows.length} sales=${salesNonEmpty}/${payload.rows.length} first=${payload.rows[0].listedTime || '-'}`);
+
+      if (stopAfterPage) {
+        stopReason = `found items older than ${args.stopDays} days on page ${payload.pageCurrent}`;
+        break;
+      }
 
       if (pageIndex >= args.pages || rows.length >= args.maxItems) break;
 
@@ -385,8 +411,8 @@ async function main() {
     }));
     fs.writeFileSync(outputPath, toCsv(csvRows, headers), "utf8");
     const debugPath = outputPath.replace(/\.csv$/i, ".debug.json");
-    fs.writeFileSync(debugPath, JSON.stringify({ total: rows.length, pageStats }, null, 2), "utf8");
-    console.log(JSON.stringify({ output: outputPath, debug: debugPath, total: rows.length, pageStats }, null, 2));
+    fs.writeFileSync(debugPath, JSON.stringify({ total: rows.length, stopDays: args.stopDays, stopReason, pageStats }, null, 2), "utf8");
+    console.log(JSON.stringify({ output: outputPath, debug: debugPath, total: rows.length, stopDays: args.stopDays, stopReason, pageStats }, null, 2));
   } finally {
     ws.close();
   }

@@ -71,6 +71,7 @@ def parse_args() -> argparse.Namespace:
         subparser.add_argument("--output-root", default=str(OUTPUT_ROOT), help="Root output directory.")
         subparser.add_argument("--endpoint", default=DEFAULT_CDP_ENDPOINT, help="Chrome CDP endpoint.")
         subparser.add_argument("--wait-ms", type=int, default=5000, help="Wait time after each page switch.")
+        subparser.add_argument("--stop-days", type=int, default=7, help="Stop scraping once items are older than this many days.")
         subparser.add_argument("--limit-categories", type=int, default=0, help="Limit the number of categories for a partial run.")
 
     add_common(subparsers.add_parser("run", help="Run the full workflow."))
@@ -131,6 +132,7 @@ def run_channel_scraper(
     sub_category: str,
     max_items: int,
     wait_ms: int,
+    stop_days: int,
 ) -> dict[str, Any]:
     pages = max((max_items + 49) // 50, 1)
     command = [
@@ -150,6 +152,8 @@ def run_channel_scraper(
         str(pages),
         "--wait-ms",
         str(wait_ms),
+        "--stop-days",
+        str(stop_days),
     ]
     result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8")
     if result.returncode != 0:
@@ -184,6 +188,7 @@ def scrape_all_categories(args: argparse.Namespace) -> Path:
             sub_category=sub_category,
             max_items=target_items,
             wait_ms=args.wait_ms,
+            stop_days=args.stop_days,
         )
         duration_seconds = round(time.time() - started, 1)
         page_stats = payload.get("pageStats", [])
@@ -195,6 +200,7 @@ def scrape_all_categories(args: argparse.Namespace) -> Path:
                 "scraped_items": int(payload.get("total", 0)),
                 "pages_requested": max((target_items + 49) // 50, 1),
                 "pages_used": len(page_stats),
+                "stop_days": args.stop_days,
                 "duration_seconds": duration_seconds,
                 "csv": str(csv_path.relative_to(dirs["run_dir"])),
                 "debug": str(Path(payload.get("debug", csv_path.with_suffix(".debug.json"))).relative_to(dirs["run_dir"])),
