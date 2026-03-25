@@ -13,8 +13,8 @@ function parseArgs(argv) {
     mainCategory: "汽车用品",
     subCategory: "美容养护",
     sortText: "上架时间",
-    maxItems: 500,
-    pages: 10,
+    maxItems: 0,
+    pages: 50,
     pageSize: 50,
     waitMs: 5000,
     stopDays: 7,
@@ -30,14 +30,16 @@ function parseArgs(argv) {
     if (key === "--main-category") args.mainCategory = value;
     if (key === "--sub-category") args.subCategory = value;
     if (key === "--sort-text") args.sortText = value;
-    if (key === "--max-items") args.maxItems = Number(value) || args.maxItems;
+    if (key === "--max-items") args.maxItems = Number(value);
     if (key === "--pages") args.pages = Number(value) || args.pages;
     if (key === "--page-size") args.pageSize = Number(value) || args.pageSize;
     if (key === "--wait-ms") args.waitMs = Number(value) || args.waitMs;
     if (key === "--stop-days") args.stopDays = Number(value) || args.stopDays;
   }
 
-  args.pages = Math.max(args.pages, Math.ceil(args.maxItems / args.pageSize));
+  if (args.maxItems > 0) {
+    args.pages = Math.max(args.pages, Math.ceil(args.maxItems / args.pageSize));
+  }
   return args;
 }
 
@@ -56,9 +58,10 @@ async function fetchJson(url) {
 
 async function connectToPage(endpoint, urlFragment) {
   const targets = await fetchJson(`${endpoint}/json/list`);
-  const pageTarget = targets.find(
+  const pageTargets = targets.filter(
     (target) => target.type === "page" && String(target.url || "").includes(urlFragment),
   );
+  const pageTarget = pageTargets[pageTargets.length - 1];
   if (!pageTarget?.webSocketDebuggerUrl) {
     throw new Error(`Target page not found for ${urlFragment}`);
   }
@@ -105,10 +108,38 @@ function toCsv(rows, headers) {
 }
 
 function extractAgeDays(value) {
-  const parts = String(value || "").match(/\d+/g);
-  if (!parts || parts.length < 4) return null;
-  const age = Number(parts[parts.length - 1]);
+  const text = String(value || "");
+  const dateMatch = text.match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (dateMatch) {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const source = new Date(Number(dateMatch[1]), Number(dateMatch[2]) - 1, Number(dateMatch[3]));
+    if (!Number.isNaN(source.getTime())) {
+      const diffDays = Math.floor((today.getTime() - source.getTime()) / 86400000);
+      if (Number.isFinite(diffDays) && diffDays >= 0) {
+        return diffDays;
+      }
+    }
+  }
+  const match = text.match(/[（(](\d+)天[）)]/);
+  if (!match) return null;
+  const age = Number(match[1]);
   return Number.isFinite(age) ? age : null;
+}
+
+function buildCsvRows(rows) {
+  return rows.map((row) => ({
+    "页码": row.page || "",
+    "类目": row.category || "",
+    "商品名": row.title || "",
+    "上架时间": row.listedTime || "",
+    "年销量": row.annualSales || "",
+    "商品原链接": row.productUrl || "",
+    "商品图片链接": row.imageUrl || "",
+    "价格": row.price || "",
+    "供货商": row.supplier || "",
+    "所在地（近似）": row.origin || "",
+  }));
 }
 
 async function main() {
@@ -128,19 +159,39 @@ async function main() {
         const rect = el.getBoundingClientRect();
         return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
       };
-      const main = Array.from(document.querySelectorAll('span.category-item__trigger')).find(
-        (el) => normalize(el.textContent) === '${mainCategoryText}' && isVisible(el),
-      );
-      if (!main) throw new Error('main category not found');
-      main.scrollIntoView({ block: 'center' });
-      for (const type of ['mouseenter', 'mouseover', 'mousedown', 'mouseup', 'click']) {
-        main.dispatchEvent(new MouseEvent(type, { bubbles: true }));
-      }
-      await sleep(1200);
-
-      const sub = Array.from(document.querySelectorAll('.fx-cascader-menu-item')).find(
+      let sub = Array.from(document.querySelectorAll('.fx-cascader-menu-item')).find(
         (el) => normalize(el.textContent) === '${subCategoryText}' && isVisible(el),
       );
+      if (!sub) {
+        let main = Array.from(document.querySelectorAll('span.category-item__trigger')).find(
+          (el) => normalize(el.textContent) === '${mainCategoryText}' && isVisible(el),
+        );
+        if (!main) {
+          const moreTrigger = Array.from(document.querySelectorAll('button, span, div, a')).find((el) => {
+            const text = normalize(el.textContent);
+            return text === '更多' && isVisible(el);
+          });
+          if (moreTrigger) {
+            moreTrigger.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+            moreTrigger.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+            moreTrigger.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+            await sleep(800);
+          }
+          main = Array.from(document.querySelectorAll('span.category-item__trigger')).find(
+            (el) => normalize(el.textContent) === '${mainCategoryText}' && isVisible(el),
+          );
+        }
+        if (!main) throw new Error('main category not found');
+        main.scrollIntoView({ block: 'center' });
+        for (const type of ['mouseenter', 'mouseover', 'mousedown', 'mouseup', 'click']) {
+          main.dispatchEvent(new MouseEvent(type, { bubbles: true }));
+        }
+        await sleep(1200);
+
+        sub = Array.from(document.querySelectorAll('.fx-cascader-menu-item')).find(
+          (el) => normalize(el.textContent) === '${subCategoryText}' && isVisible(el),
+        );
+      }
       if (!sub) throw new Error('sub category not found');
       sub.scrollIntoView({ block: 'center' });
       for (const type of ['pointerdown', 'mousedown', 'mouseup', 'click']) {
@@ -189,7 +240,7 @@ async function main() {
 
     const waitReadyExpression = `(() => {
       const normalize = (text) => (text || '').replace(/\\u00a0/g, ' ').replace(/\\s+/g, ' ').trim();
-      const cards = Array.from(document.querySelectorAll('a.fx-offer-card[href*="detail.1688.com/offer/"]')).slice(0, ${args.pageSize});
+      const cards = getVisibleCards().slice(0, ${args.pageSize});
       const rows = cards.map((card) => {
         const pluginText = normalize(card.querySelector('.plugin-offer-search-card')?.textContent || '');
         const fullText = normalize(card.innerText || '');
@@ -209,7 +260,21 @@ async function main() {
     })()`;
 
     const extractExpression = `(() => {
-      const normalize = (text) => (text || '').replace(/\\u00a0/g, ' ').replace(/\\s+/g, ' ').trim();
+      const normalize = (text) => (text || '').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
+      const isVisibleCard = (el) => {
+        if (!el) return false;
+        const style = window.getComputedStyle(el);
+        const rect = el.getBoundingClientRect();
+        return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 20 && rect.height > 20 && rect.bottom > 0 && rect.top < window.innerHeight;
+      };
+      const getVisibleCards = () => Array.from(document.querySelectorAll('a.fx-offer-card[href*="detail.1688.com/offer/"]'))
+        .filter((card) => isVisibleCard(card))
+        .sort((a, b) => {
+          const ra = a.getBoundingClientRect();
+          const rb = b.getBoundingClientRect();
+          if (Math.round(ra.top) !== Math.round(rb.top)) return ra.top - rb.top;
+          return ra.left - rb.left;
+        });
       const getProvinceLike = (text) => {
         const source = normalize(text);
         if (!source) return '';
@@ -304,8 +369,16 @@ async function main() {
     const seen = new Set();
     const pageStats = [];
     let stopReason = "";
+    const outputPath = path.resolve(args.output);
+    fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+    const headers = ["页码", "类目", "商品名", "上架时间", "年销量", "商品原链接", "商品图片链接", "价格", "供货商", "所在地（近似）"];
+    const debugPath = outputPath.replace(/\.csv$/i, ".debug.json");
+    const flushProgress = () => {
+      fs.writeFileSync(outputPath, toCsv(buildCsvRows(rows), headers), "utf8");
+      fs.writeFileSync(debugPath, JSON.stringify({ total: rows.length, stopDays: args.stopDays, stopReason, pageStats }, null, 2), "utf8");
+    };
 
-    for (let pageIndex = 1; pageIndex <= args.pages && rows.length < args.maxItems; pageIndex += 1) {
+    for (let pageIndex = 1; pageIndex <= args.pages && (args.maxItems <= 0 || rows.length < args.maxItems); pageIndex += 1) {
       await new Promise((resolve) => setTimeout(resolve, args.waitMs));
       const readyResult = await send("Runtime.evaluate", { expression: waitReadyExpression, returnByValue: true });
       const ready = readyResult.result?.value || {};
@@ -324,18 +397,25 @@ async function main() {
       let imageNonEmpty = 0;
       let categoryNonEmpty = 0;
       let oldestAgeOnPage = null;
-      let stopAfterPage = false;
+      let olderCountOnPage = 0;
+      const rowDebug = [];
       for (const row of payload.rows) {
         const ageDays = extractAgeDays(row.listedTime);
+        rowDebug.push({
+          title: row.title,
+          listedTime: row.listedTime,
+          ageDays,
+          productUrl: row.productUrl,
+        });
         if (ageDays != null) {
           oldestAgeOnPage = oldestAgeOnPage == null ? ageDays : Math.max(oldestAgeOnPage, ageDays);
+          if (ageDays > args.stopDays) olderCountOnPage += 1;
         }
         if (row.listedTime) listedNonEmpty += 1;
         if (row.annualSales) salesNonEmpty += 1;
         if (row.imageUrl) imageNonEmpty += 1;
         if (row.category && row.category !== '-') categoryNonEmpty += 1;
         if (ageDays != null && ageDays > args.stopDays) {
-          stopAfterPage = true;
           continue;
         }
         const key = row.productUrl;
@@ -343,8 +423,11 @@ async function main() {
         seen.add(key);
         rows.push(row);
         added += 1;
-        if (rows.length >= args.maxItems) break;
+        if (args.maxItems > 0 && rows.length >= args.maxItems) break;
       }
+      const tailAges = rowDebug.slice(-5).map((row) => row.ageDays).filter((age) => age != null);
+      const tailOlderCount = tailAges.filter((age) => age > args.stopDays).length;
+      const stopAfterPage = tailAges.length >= 3 && tailOlderCount >= 3;
 
       pageStats.push({
         page: payload.pageCurrent,
@@ -355,16 +438,21 @@ async function main() {
         categoryNonEmpty,
         firstDate: payload.rows[0].listedTime || '',
         oldestAgeOnPage,
+        olderCountOnPage,
+        tailAges,
+        tailOlderCount,
+        rowDebug,
         readySnapshot: ready,
       });
-      console.error(`page=${payload.pageCurrent} added=${added} listed=${listedNonEmpty}/${payload.rows.length} image=${imageNonEmpty}/${payload.rows.length} category=${categoryNonEmpty}/${payload.rows.length} sales=${salesNonEmpty}/${payload.rows.length} first=${payload.rows[0].listedTime || '-'}`);
+      console.error(`page=${payload.pageCurrent} added=${added} total=${rows.length} listed=${listedNonEmpty}/${payload.rows.length} image=${imageNonEmpty}/${payload.rows.length} category=${categoryNonEmpty}/${payload.rows.length} sales=${salesNonEmpty}/${payload.rows.length} first=${payload.rows[0].listedTime || '-'} oldest=${oldestAgeOnPage ?? '-'}d`);
+      flushProgress();
 
       if (stopAfterPage) {
-        stopReason = `found items older than ${args.stopDays} days on page ${payload.pageCurrent}`;
+        stopReason = `tail of page ${payload.pageCurrent} entered items older than ${args.stopDays} days`;
         break;
       }
 
-      if (pageIndex >= args.pages || rows.length >= args.maxItems) break;
+      if (pageIndex >= args.pages || (args.maxItems > 0 && rows.length >= args.maxItems)) break;
 
       const nextExpression = `((prevHref, waitMs) => new Promise((resolve) => {
         const normalize = (text) => (text || '').replace(/\\s+/g, ' ').trim();
@@ -394,24 +482,6 @@ async function main() {
       if (!nextPayload?.ok) throw new Error(`next page failed after ${payload.pageCurrent}: ${nextPayload?.reason || 'unknown'}`);
     }
 
-    const outputPath = path.resolve(args.output);
-    fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-    const headers = ["页码", "类目", "商品名", "上架时间", "年销量", "商品原链接", "商品图片链接", "价格", "供货商", "所在地（近似）"];
-    const csvRows = rows.map((row) => ({
-      "页码": row.page || "",
-      "类目": row.category || "",
-      "商品名": row.title || "",
-      "上架时间": row.listedTime || "",
-      "年销量": row.annualSales || "",
-      "商品原链接": row.productUrl || "",
-      "商品图片链接": row.imageUrl || "",
-      "价格": row.price || "",
-      "供货商": row.supplier || "",
-      "所在地（近似）": row.origin || "",
-    }));
-    fs.writeFileSync(outputPath, toCsv(csvRows, headers), "utf8");
-    const debugPath = outputPath.replace(/\.csv$/i, ".debug.json");
-    fs.writeFileSync(debugPath, JSON.stringify({ total: rows.length, stopDays: args.stopDays, stopReason, pageStats }, null, 2), "utf8");
     console.log(JSON.stringify({ output: outputPath, debug: debugPath, total: rows.length, stopDays: args.stopDays, stopReason, pageStats }, null, 2));
   } finally {
     ws.close();

@@ -72,6 +72,7 @@ def parse_args() -> argparse.Namespace:
         subparser.add_argument("--endpoint", default=DEFAULT_CDP_ENDPOINT, help="Chrome CDP endpoint.")
         subparser.add_argument("--wait-ms", type=int, default=5000, help="Wait time after each page switch.")
         subparser.add_argument("--stop-days", type=int, default=7, help="Stop scraping once items are older than this many days.")
+        subparser.add_argument("--max-pages", type=int, default=50, help="Safety cap for pagination when using stop-days mode.")
         subparser.add_argument("--limit-categories", type=int, default=0, help="Limit the number of categories for a partial run.")
 
     add_common(subparsers.add_parser("run", help="Run the full workflow."))
@@ -133,8 +134,9 @@ def run_channel_scraper(
     max_items: int,
     wait_ms: int,
     stop_days: int,
+    max_pages: int,
 ) -> dict[str, Any]:
-    pages = max((max_items + 49) // 50, 1)
+    pages = max((max_items + 49) // 50, 1) if max_items > 0 else max_pages
     command = [
         "node",
         str(SCRAPER_SCRIPT_PATH),
@@ -178,7 +180,8 @@ def scrape_all_categories(args: argparse.Namespace) -> Path:
 
     for category in categories:
         sub_category = category["sub_category"]
-        target_items = int(category.get("target_items", 500))
+        configured_target_items = int(category.get("target_items", 0) or 0)
+        target_items = 0 if args.stop_days > 0 else configured_target_items
         csv_path = dirs["raw_dir"] / f"{slugify(sub_category)}.csv"
         started = time.time()
         payload = run_channel_scraper(
@@ -189,6 +192,7 @@ def scrape_all_categories(args: argparse.Namespace) -> Path:
             max_items=target_items,
             wait_ms=args.wait_ms,
             stop_days=args.stop_days,
+            max_pages=args.max_pages,
         )
         duration_seconds = round(time.time() - started, 1)
         page_stats = payload.get("pageStats", [])
@@ -197,8 +201,9 @@ def scrape_all_categories(args: argparse.Namespace) -> Path:
                 "main_category": category["main_category"],
                 "sub_category": sub_category,
                 "target_items": target_items,
+                "configured_target_items": configured_target_items,
                 "scraped_items": int(payload.get("total", 0)),
-                "pages_requested": max((target_items + 49) // 50, 1),
+                "pages_requested": max((target_items + 49) // 50, 1) if target_items > 0 else args.max_pages,
                 "pages_used": len(page_stats),
                 "stop_days": args.stop_days,
                 "duration_seconds": duration_seconds,
@@ -430,7 +435,7 @@ def report_run(run_dir: Path) -> dict[str, Any]:
 
 def estimate_duration(categories_path: Path) -> dict[str, Any]:
     categories = load_categories(categories_path)
-    estimated_pages = sum(max((int(item.get("target_items", 500)) + 49) // 50, 1) for item in categories)
+    estimated_pages = sum(max((int(item.get("target_items", 0) or 0) + 49) // 50, 1) if int(item.get("target_items", 0) or 0) > 0 else 10 for item in categories)
     optimistic_minutes = round(estimated_pages * 8 / 60, 1)
     conservative_minutes = round(estimated_pages * 15 / 60, 1)
     return {
