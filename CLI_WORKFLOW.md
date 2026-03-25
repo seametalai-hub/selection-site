@@ -2,24 +2,40 @@
 
 ## Unified Entry
 
-Primary command:
+Primary one-click command:
 
 ```powershell
-python update_products.py run
+run_live_update.bat
 ```
 
-This is the single workflow entrypoint for OpenClaw / manual runs.
+This is the daily operator entrypoint.
+
+It will:
+- scrape all enabled categories
+- keep only `<= 7天` rows
+- stop when the page tail has clearly entered `> 7天`
+- generate `products.json`
+- rebuild and publish the local site
+- commit and push to GitHub
+- let Vercel refresh the public link
+
+Manual CLI entrypoint:
+
+```powershell
+python update_products.py run --stop-days 7
+```
 
 ## Commands
 
 ```powershell
 python update_products.py estimate
-python update_products.py scrape
+python update_products.py scrape --stop-days 7
 python update_products.py generate-json --run-dir <run_dir>
 python update_products.py build-site --run-dir <run_dir>
+python update_products.py publish --run-dir <run_dir>
 python update_products.py package --run-dir <run_dir>
 python update_products.py report --run-dir <run_dir>
-python update_products.py run
+python update_products.py run --stop-days 7
 ```
 
 ## Category Config
@@ -30,7 +46,7 @@ Category config file:
 
 Current scope:
 - 12 categories
-- default 500 items per category
+- in `--stop-days 7` mode, category `target_items` is treated as a legacy config value and not used as a hard cap
 - excludes `电动车` and `整车`
 
 ## Output Structure
@@ -58,7 +74,7 @@ outputs/
 
 ## Runtime Estimate
 
-Current estimate for 12 categories x 500 items:
+Current estimate for full 12-category `7天` mode:
 - optimistic: about 27 minutes
 - conservative: about 51 minutes
 - external communication recommendation: 30 to 60 minutes
@@ -74,7 +90,7 @@ python update_products.py estimate
 Recommended OpenClaw call:
 
 ```powershell
-python update_products.py run
+run_live_update.bat
 ```
 
 Expected reply payload fields:

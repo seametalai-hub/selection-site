@@ -15,3 +15,7 @@ server.out
 demo.zip
 demo (2).zip
 *.xlsx
+categories.stop7.smoke.json
+page8_rows.json
+page9_dom_dump.json
+page9_dom_dump.html
